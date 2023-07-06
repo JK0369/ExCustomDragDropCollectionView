@@ -169,7 +169,7 @@ private extension DragDropCollectionView {
             let draggedCellIndexPath = draggedCellIndexPath,
                 !Double(currentTouchLocation.x).isNaN,
                 !Double(currentTouchLocation.y).isNaN,
-            distanceBetweenPoints(previousTouchLocation, secondPoint: currentTouchLocation) < CGFloat(20.0),
+            distanceBetweenPoints(previousTouchLocation, secondPoint: currentTouchLocation) < CGFloat(1.0),
             let newIndexPathForCell = indexPathForItem(at: currentTouchLocation),
             newIndexPathForCell != draggedCellIndexPath
         else { return (false, nil) }

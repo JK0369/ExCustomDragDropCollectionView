@@ -78,13 +78,9 @@ extension ViewController: UICollectionViewDataSource {
 
 extension ViewController: DragDropCollectionViewDelegate {
     func didMoveCell(sourceIndexPath: IndexPath, destinationIndexPath: IndexPath) {
-//        let sourceItem = dataSource[sourceIndexPath.item]
-//        
-//        dataSource.remove(at: sourceIndexPath.item)
-//        dataSource.insert(sourceItem, at: destinationIndexPath.item)
-//        
-//        dragDropCollectionView.deleteItems(at: [sourceIndexPath])
-//        dragDropCollectionView.insertItems(at: [destinationIndexPath])
+        let itemToMove = dataSource[sourceIndexPath.item]
+        dataSource.remove(at: sourceIndexPath.item)
+        dataSource.insert(itemToMove, at: destinationIndexPath.item)
     }
     
     func draggingDidBegin(indexPath: IndexPath) {
