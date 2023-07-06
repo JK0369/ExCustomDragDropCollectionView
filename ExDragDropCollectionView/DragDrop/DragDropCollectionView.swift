@@ -43,6 +43,7 @@ final class DragDropCollectionView: UICollectionView {
     }()
     private var draggedCellIndexPath: IndexPath?
     private var touchOffsetFromCenterOfCell: CGPoint?
+    private var isAutoScrolling = false
     
     // MARK: Initializer
     override init(frame: CGRect, collectionViewLayout layout: UICollectionViewLayout) {
@@ -115,10 +116,21 @@ private extension DragDropCollectionView {
     }
     
     func handleChanged(touchLocation: CGPoint) {
+        if !isAutoScrolling {
+            dispatchOnMainQueueAfter(Policy.pingInterval, closure: { () -> () in
+                let scroller = self.shouldAutoScroll(touchLocation)
+                if scroller.shouldScroll {
+                    self.autoScroll(scroller.direction)
+                    self.isAutoScrolling = true
+                }
+            })
+        }
+        
         guard
             draggedCellIndexPath != nil,
             let touchOffsetFromCenterOfCell = touchOffsetFromCenterOfCell
         else { return }
+        
         draggingView?.center = CGPoint(
             x: touchLocation.x + touchOffsetFromCenterOfCell.x,
             y: touchLocation.y + touchOffsetFromCenterOfCell.y
@@ -167,12 +179,13 @@ private extension DragDropCollectionView {
         guard
             case let currentTouchLocation = longPressRecognizer.location(in: self),
             let draggedCellIndexPath = draggedCellIndexPath,
-                !Double(currentTouchLocation.x).isNaN,
-                !Double(currentTouchLocation.y).isNaN,
-            distanceBetweenPoints(previousTouchLocation, secondPoint: currentTouchLocation) < CGFloat(1.0),
+            !Double(currentTouchLocation.x).isNaN,
+            !Double(currentTouchLocation.y).isNaN,
+            distanceBetweenPoints(previousTouchLocation, secondPoint: currentTouchLocation) < CGFloat(20.0),
             let newIndexPathForCell = indexPathForItem(at: currentTouchLocation),
             newIndexPathForCell != draggedCellIndexPath
         else { return (false, nil) }
+        
         return (true, newIndexPathForCell)
     }
     
@@ -211,5 +224,90 @@ private extension DragDropCollectionView {
         let xDistance = firstPoint.x - secondPoint.x
         let yDistance = firstPoint.y - secondPoint.y
         return sqrt(xDistance * xDistance + yDistance * yDistance)
+    }
+}
+
+//AutoScroll
+extension DragDropCollectionView {
+    enum AutoScrollDirection: Int {
+        case invalid = 0
+        case towardsOrigin = 1
+        case awayFromOrigin = 2
+    }
+    
+    func autoScroll(_ direction: AutoScrollDirection) {
+        let currentLongPressTouchLocation = self.longPressRecognizer.location(in: self)
+        var increment: CGFloat
+        var newContentOffset: CGPoint
+        if (direction == AutoScrollDirection.towardsOrigin) {
+            increment = -50.0
+        } else {
+            increment = 50.0
+        }
+        newContentOffset = CGPoint(x: self.contentOffset.x, y: self.contentOffset.y + increment)
+        let flowLayout = self.collectionViewLayout as! UICollectionViewFlowLayout
+        if flowLayout.scrollDirection == UICollectionView.ScrollDirection.horizontal{
+            newContentOffset = CGPoint(x: self.contentOffset.x + increment, y: self.contentOffset.y)
+        }
+        if ((direction == AutoScrollDirection.towardsOrigin && newContentOffset.y < 0) || (direction == AutoScrollDirection.awayFromOrigin && newContentOffset.y > self.contentSize.height - self.frame.height)) {
+            dispatchOnMainQueueAfter(0.3, closure: { () -> () in
+                self.isAutoScrolling = false
+            })
+        } else {
+            UIView.animate(withDuration: 0.3
+                           , delay: 0.0
+                           , options: UIView.AnimationOptions.curveLinear
+                           , animations: { () -> Void in
+                self.setContentOffset(newContentOffset, animated: false)
+                if (self.draggingView != nil) {
+                    if flowLayout.scrollDirection == UICollectionView.ScrollDirection.vertical{
+                        var draggingFrame = self.draggingView!.frame
+                        draggingFrame.origin.y += increment
+                        self.draggingView!.frame = draggingFrame
+                    }else{
+                        var draggingFrame = self.draggingView!.frame
+                        draggingFrame.origin.x += increment
+                        self.draggingView!.frame = draggingFrame
+                    }
+                }
+            }) { (finished) -> Void in
+                self.dispatchOnMainQueueAfter(0.0, closure: { () -> () in
+                    var updatedTouchLocationWithNewOffset = CGPoint(x: currentLongPressTouchLocation.x, y: currentLongPressTouchLocation.y + increment)
+                    if flowLayout.scrollDirection == UICollectionView.ScrollDirection.horizontal{
+                        updatedTouchLocationWithNewOffset = CGPoint(x: currentLongPressTouchLocation.x + increment, y: currentLongPressTouchLocation.y)
+                    }
+                    let scroller = self.shouldAutoScroll(updatedTouchLocationWithNewOffset)
+                    if scroller.shouldScroll {
+                        self.autoScroll(scroller.direction)
+                    } else {
+                        self.isAutoScrolling = false
+                    }
+                })
+            }
+        }
+    }
+    
+    func shouldAutoScroll(_ previousTouchLocation: CGPoint) -> (shouldScroll: Bool, direction: AutoScrollDirection) {
+        let previousTouchLocation = self.convert(previousTouchLocation, to: self.superview)
+        let currentTouchLocation = self.longPressRecognizer.location(in: self.superview)
+        
+        if let flowLayout = self.collectionViewLayout as? UICollectionViewFlowLayout {
+            if !Double(currentTouchLocation.x).isNaN && !Double(currentTouchLocation.y).isNaN {
+                if distanceBetweenPoints(previousTouchLocation, secondPoint: currentTouchLocation) < CGFloat(20.0) {
+                    let scrollBoundsLength: CGFloat = 50.0
+                    let scrollBoundsSize = CGSize(width: scrollBoundsLength, height: self.frame.height)
+                    let scrollRectAtEnd = CGRect(x: self.frame.origin.x + self.frame.width - scrollBoundsSize.width , y: self.frame.origin.y, width: scrollBoundsSize.width, height: self.frame.height)
+                    
+                    let scrollRectAtOrigin = CGRect(origin: self.frame.origin, size: scrollBoundsSize)
+                    
+                    if scrollRectAtOrigin.contains(currentTouchLocation) {
+                        return (true, .towardsOrigin)
+                    } else if scrollRectAtEnd.contains(currentTouchLocation) {
+                        return (true, .awayFromOrigin)
+                    }
+                }
+            }
+        }
+        return (false, AutoScrollDirection.invalid)
     }
 }

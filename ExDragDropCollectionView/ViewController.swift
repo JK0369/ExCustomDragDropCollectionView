@@ -8,12 +8,13 @@
 import UIKit
 
 final class MyCell: UICollectionViewCell {
-    override init(frame: CGRect) {
-        super.init(frame: .zero)
-        contentView.backgroundColor = [UIColor.black, .blue, .orange, .yellow].randomElement()
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        prepare(color: nil)
     }
-    required init?(coder: NSCoder) {
-        fatalError()
+    
+    func prepare(color: UIColor?) {
+        contentView.backgroundColor = color
     }
 }
 
@@ -40,7 +41,10 @@ class ViewController: UIViewController {
         return field
     }()
     
-    var dataSource = (1...10).map(String.init)
+    var dataSource = (1...10).map { _ in
+        [UIColor.black, .blue, .orange, .yellow].randomElement()
+    }
+    fileprivate var isAutoScrolling = false
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -72,6 +76,7 @@ extension ViewController: UICollectionViewDataSource {
     }
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! MyCell
+        cell.prepare(color: dataSource[indexPath.item])
         return cell
     }
 }
@@ -84,10 +89,10 @@ extension ViewController: DragDropCollectionViewDelegate {
     }
     
     func draggingDidBegin(indexPath: IndexPath) {
-        print("draggingDidBegin>", indexPath.row)
+//        print("draggingDidBegin>", indexPath.row)
     }
     
     func draggingDidEnd(indexPath: IndexPath) {
-        print("draggingDidEnd>", indexPath.row)
+//        print("draggingDidEnd>", indexPath.row)
     }
 }
